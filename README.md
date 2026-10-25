@@ -1,5 +1,6 @@
 # dtask
-n[![ci](https://github.com/monaaoua9/dtask/actions/workflows/ci.yml/badge.svg)](https://github.com/monaaoua9/dtask/actions/workflows/ci.yml)
+
+[![ci](https://github.com/monaaoua9/dtask/actions/workflows/ci.yml/badge.svg)](https://github.com/monaaoua9/dtask/actions/workflows/ci.yml)
 
 A distributed task execution and scheduling engine in Go. Every node runs the
 same binary; together they form a Raft cluster that stores the task queue,
