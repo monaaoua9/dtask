@@ -1,0 +1,54 @@
+# Three-node cluster plus Prometheus.
+#   docker compose -f deploy/docker-compose.yml up --build -d
+#   docker compose -f deploy/docker-compose.yml exec n1 dtaskctl --addr n1:7000 status --node n1:7000
+# Kill the leader (docker compose kill n1) and watch the others take over.
+
+x-node: &node
+  build: ..
+  restart: unless-stopped
+  stop_grace_period: 40s # a bit more than --shutdown-timeout so SIGTERM can drain
+  environment:
+    DTASK_PEERS: n1=n1:7000,n2=n2:7000,n3=n3:7000
+    DTASK_LISTEN: ":7000"
+    DTASK_HTTP: ":9090"
+
+services:
+  n1:
+    <<: *node
+    hostname: n1
+    environment:
+      DTASK_PEERS: n1=n1:7000,n2=n2:7000,n3=n3:7000
+      DTASK_ID: n1
+      DTASK_ADVERTISE: n1:7000
+    volumes: [n1-data:/data]
+    ports: ["7001:7000", "9091:9090"]
+
+  n2:
+    <<: *node
+    hostname: n2
+    environment:
+      DTASK_PEERS: n1=n1:7000,n2=n2:7000,n3=n3:7000
+      DTASK_ID: n2
+      DTASK_ADVERTISE: n2:7000
+    volumes: [n2-data:/data]
+    ports: ["7002:7000", "9092:9090"]
+
+  n3:
+    <<: *node
+    hostname: n3
+    environment:
+      DTASK_PEERS: n1=n1:7000,n2=n2:7000,n3=n3:7000
+      DTASK_ID: n3
+      DTASK_ADVERTISE: n3:7000
+    volumes: [n3-data:/data]
+    ports: ["7003:7000", "9093:9090"]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+
+volumes:
+  n1-data:
+  n2-data:
+  n3-data:
