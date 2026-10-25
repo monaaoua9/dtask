@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package dtask.v1;
+
+option go_package = "github.com/monaaoua9/dtask/api/gen/dtask/v1;dtaskv1";
+
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  TASK_STATE_PENDING = 1;
+  TASK_STATE_LEASED = 2;
+  TASK_STATE_SUCCEEDED = 3;
+  TASK_STATE_DEAD = 4;
+  TASK_STATE_CANCELED = 5;
+}
+
+message RetryPolicy {
+  uint32 max_attempts = 1;
+  uint32 base_delay_ms = 2;
+  uint32 max_delay_ms = 3;
+}
+
+message Task {
+  string id = 1;
+  string queue = 2;
+  string type = 3;
+  bytes payload = 4;
+  int32 priority = 5;
+  TaskState state = 6;
+  uint32 attempt = 7;
+  RetryPolicy retry = 8;
+  string idempotency_key = 9;
+  int64 created_at_ns = 10;
+  int64 available_at_ns = 11;
+  int64 finished_at_ns = 12;
+  string lease_worker = 13;
+  uint64 lease_token = 14;
+  int64 lease_expires_at_ns = 15;
+  string last_error = 16;
+  bytes result = 17;
+  uint64 seq = 18;
+}
+
+service TaskService {
+  rpc Submit(SubmitRequest) returns (SubmitResponse);
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+
+  // worker-facing
+  rpc Lease(LeaseRequest) returns (LeaseResponse);
+  rpc ExtendLease(ExtendLeaseRequest) returns (ExtendLeaseResponse);
+  rpc Complete(CompleteRequest) returns (CompleteResponse);
+  rpc Fail(FailRequest) returns (FailResponse);
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+}
+
+message SubmitRequest {
+  string queue = 1;
+  string type = 2;
+  bytes payload = 3;
+  int32 priority = 4;
+  // zero means run as soon as possible
+  int64 delay_ms = 5;
+  RetryPolicy retry = 6;
+  // same key on the same queue returns the original task instead of a new one
+  string idempotency_key = 7;
+}
+
+message SubmitResponse {
+  Task task = 1;
+  bool duplicate = 2;
+}
+
+message GetTaskRequest {
+  string id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}
+
+message ListTasksRequest {
+  string queue = 1;
+  TaskState state = 2;
+  uint32 page_size = 3;
+  // opaque cursor from the previous page, empty for the first one
+  string cursor = 4;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+  string next_cursor = 2;
+}
+
+message CancelTaskRequest {
+  string id = 1;
+}
+
+message CancelTaskResponse {
+  Task task = 1;
+}
+
+message LeaseRequest {
+  string worker_id = 1;
+  repeated string queues = 2;
+  uint32 max_tasks = 3;
+  uint32 lease_ttl_ms = 4;
+}
+
+message LeaseResponse {
+  repeated Task tasks = 1;
+}
+
+message ExtendLeaseRequest {
+  string task_id = 1;
+  uint64 token = 2;
+  uint32 lease_ttl_ms = 3;
+}
+
+message ExtendLeaseResponse {
+  int64 expires_at_ns = 1;
+}
+
+message CompleteRequest {
+  string task_id = 1;
+  uint64 token = 2;
+  bytes result = 3;
+}
+
+message CompleteResponse {}
+
+message FailRequest {
+  string task_id = 1;
+  uint64 token = 2;
+  string error = 3;
+  // permanent failures skip the remaining attempts
+  bool permanent = 4;
+}
+
+message FailResponse {
+  Task task = 1;
+}
+
+message ReleaseRequest {
+  string task_id = 1;
+  uint64 token = 2;
+}
+
+message ReleaseResponse {}

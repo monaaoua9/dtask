@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package dtask.v1;
+
+import "dtask/v1/admin.proto";
+import "dtask/v1/task.proto";
+
+option go_package = "github.com/monaaoua9/dtask/api/gen/dtask/v1;dtaskv1";
+
+// Everything that goes through the replicated log. Commands carry the
+// leader's wall clock (now_ns) so the state machine never reads a clock
+// and replaying the log gives the same result on every node.
+message Command {
+  oneof cmd {
+    SubmitCmd submit = 1;
+    LeaseCmd lease = 2;
+    ExtendCmd extend = 3;
+    CompleteCmd complete = 4;
+    FailCmd fail = 5;
+    ReleaseCmd release = 6;
+    ReapCmd reap = 7;
+    ExpireNodeCmd expire_node = 8;
+    SetQueueConfigCmd set_queue_config = 9;
+    CancelCmd cancel = 10;
+  }
+}
+
+message SubmitCmd {
+  string id = 1;
+  string queue = 2;
+  string type = 3;
+  bytes payload = 4;
+  int32 priority = 5;
+  RetryPolicy retry = 6;
+  string idempotency_key = 7;
+  int64 available_at_ns = 8;
+  int64 now_ns = 9;
+}
+
+message LeaseCmd {
+  string worker_id = 1;
+  repeated string queues = 2;
+  uint32 max_tasks = 3;
+  int64 ttl_ns = 4;
+  int64 now_ns = 5;
+}
+
+message ExtendCmd {
+  string task_id = 1;
+  uint64 token = 2;
+  int64 ttl_ns = 3;
+  int64 now_ns = 4;
+}
+
+message CompleteCmd {
+  string task_id = 1;
+  uint64 token = 2;
+  bytes result = 3;
+  int64 now_ns = 4;
+}
+
+message FailCmd {
+  string task_id = 1;
+  uint64 token = 2;
+  string error = 3;
+  bool permanent = 4;
+  // picked by the leader (backoff + jitter) so replicas dont need an rng
+  int64 retry_at_ns = 5;
+  int64 now_ns = 6;
+}
+
+message ReleaseCmd {
+  string task_id = 1;
+  uint64 token = 2;
+  int64 now_ns = 3;
+}
+
+message ReapCmd {
+  int64 now_ns = 1;
+  // finished tasks older than this are dropped, 0 keeps everything
+  int64 retention_ns = 2;
+}
+
+message ExpireNodeCmd {
+  string node_id = 1;
+  int64 now_ns = 2;
+}
+
+message SetQueueConfigCmd {
+  QueueConfig config = 1;
+  int64 now_ns = 2;
+}
+
+message CancelCmd {
+  string task_id = 1;
+  int64 now_ns = 2;
+}
+
+message QueueState {
+  QueueConfig config = 1;
+  // milli-tokens, integer math keeps replicas bit-identical
+  int64 tokens_milli = 2;
+  int64 last_refill_ns = 3;
+}
+
+message FSMSnapshot {
+  repeated Task tasks = 1;
+  repeated QueueState queues = 2;
+  uint64 next_seq = 3;
+  uint64 next_token = 4;
+  int64 clock_ns = 5;
+}

@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package dtask.v1;
+
+option go_package = "github.com/monaaoua9/dtask/api/gen/dtask/v1;dtaskv1";
+
+service AdminService {
+  rpc Status(StatusRequest) returns (StatusResponse);
+  rpc AddServer(AddServerRequest) returns (AddServerResponse);
+  rpc RemoveServer(RemoveServerRequest) returns (RemoveServerResponse);
+  rpc SetQueueConfig(SetQueueConfigRequest) returns (SetQueueConfigResponse);
+  rpc QueueStats(QueueStatsRequest) returns (QueueStatsResponse);
+}
+
+message ServerInfo {
+  string id = 1;
+  string addr = 2;
+  bool voter = 3;
+  // only filled in by the leader
+  bool healthy = 4;
+  double phi = 5;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  string node_id = 1;
+  string role = 2;
+  uint64 term = 3;
+  string leader_id = 4;
+  string leader_addr = 5;
+  uint64 commit_index = 6;
+  uint64 last_applied = 7;
+  uint64 last_log_index = 8;
+  repeated ServerInfo servers = 9;
+}
+
+message AddServerRequest {
+  string id = 1;
+  string addr = 2;
+}
+
+message AddServerResponse {}
+
+message RemoveServerRequest {
+  string id = 1;
+}
+
+message RemoveServerResponse {}
+
+message QueueConfig {
+  string name = 1;
+  // 0 disables rate limiting
+  double rate_per_sec = 2;
+  uint32 burst = 3;
+  // 0 means unlimited
+  uint32 max_in_flight = 4;
+}
+
+message SetQueueConfigRequest {
+  QueueConfig config = 1;
+}
+
+message SetQueueConfigResponse {}
+
+message QueueStatsRequest {}
+
+message QueueStat {
+  string name = 1;
+  uint64 pending = 2;
+  uint64 delayed = 3;
+  uint64 leased = 4;
+  uint64 succeeded = 5;
+  uint64 dead = 6;
+  QueueConfig config = 7;
+}
+
+message QueueStatsResponse {
+  repeated QueueStat queues = 1;
+}
