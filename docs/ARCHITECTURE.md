@@ -144,7 +144,26 @@ FSM (`HasReady`) so empty polls don't write to the log; a stale peek at worst
 returns "nothing right now", never a wrong grant, because the grant itself is
 decided inside the log.
 
-## 6. Failure matrix
+## 6. Checking linearizability
+
+`TestLinearizableUnderChaos` records every call (start, end, input, output)
+that clients make against a 5-node cluster while nodes crash and links fail,
+then asks `internal/linearize` whether each task's history has a sequential
+explanation that respects real time and the lease rules (a token is only
+accepted while it is the current one, tokens only grow, a read sees every write
+that finished before it started).
+
+Calls that end in a timeout or leadership change are recorded as *indefinite*:
+they may have applied at any later point or never. A lease whose result was lost
+doesn't say which task it took, so it is added as an optional lease to every
+task's history (sound, slightly permissive). Linearizability composes per
+object, which is why checking tasks one by one is enough.
+
+To make sure the checker can fail, two mutations were tried by hand: fencing
+that ignores the token, and `GetTask` without the read barrier. Both are caught
+on every seed.
+
+## 7. Failure matrix
 
 | Event | What happens |
 |---|---|
@@ -158,7 +177,7 @@ decided inside the log.
 | Disk write failure | The node panics rather than continue with state it can't persist. |
 | Client retries a submit | Same idempotency key → original task returned. |
 
-## 7. Deliberate trade-offs
+## 8. Deliberate trade-offs
 
 - **From-scratch Raft instead of a library.** The goal was to show the protocol
   and its failure handling, with tests that attack it. The cost is that it has
