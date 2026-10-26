@@ -235,18 +235,16 @@ type Store interface {
 }
 
 var (
-	ErrNotLeader         = errors.New("raft: not the leader")
-	ErrLeadershipLost    = errors.New("raft: leadership lost before commit, outcome unknown")
-	ErrStopped           = errors.New("raft: node stopped")
-	ErrConfigInProgress  = errors.New("raft: another membership change is in progress")
-	ErrLeaderNotReady    = errors.New("raft: leader has not committed an entry in its term yet")
-	ErrUnknownServer     = errors.New("raft: unknown server")
-	ErrLastVoter         = errors.New("raft: cannot remove the last voter")
-	ErrTransferring      = errors.New("raft: leadership transfer in progress")
-	ErrNoTransferTarget  = errors.New("raft: no other voter to hand leadership to")
-	ErrSnapshotStale     = errors.New("raft: snapshot is older than local state")
-	errLogCompacted      = errors.New("raft: entry compacted")
-	errLogIndexOutOfSync = errors.New("raft: log index out of range")
+	ErrNotLeader        = errors.New("raft: not the leader")
+	ErrLeadershipLost   = errors.New("raft: leadership lost before commit, outcome unknown")
+	ErrStopped          = errors.New("raft: node stopped")
+	ErrConfigInProgress = errors.New("raft: another membership change is in progress")
+	ErrLeaderNotReady   = errors.New("raft: leader has not committed an entry in its term yet")
+	ErrUnknownServer    = errors.New("raft: unknown server")
+	ErrLastVoter        = errors.New("raft: cannot remove the last voter")
+	ErrTransferring     = errors.New("raft: leadership transfer in progress")
+	ErrNoTransferTarget = errors.New("raft: no other voter to hand leadership to")
+	ErrSnapshotStale    = errors.New("raft: snapshot is older than local state")
 )
 
 // NotLeaderError carries a hint for clients to retry elsewhere.

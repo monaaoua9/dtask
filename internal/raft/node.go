@@ -656,23 +656,6 @@ func (n *Node) proposeBatch(batch []*proposal) {
 	}
 }
 
-func (n *Node) propose(t EntryType, data []byte) (*future, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return n.proposeLocked(t, data)
-}
-
-func (n *Node) proposeLocked(t EntryType, data []byte) (*future, error) {
-	if err := n.proposableLocked(); err != nil {
-		return nil, err
-	}
-	f := n.registerLocked(n.appendEntryLocked(t, data))
-	n.advanceCommitLocked() // single-voter clusters commit right here
-	n.kickReplicatorsLocked()
-	n.updateMetricsLocked()
-	return f, nil
-}
-
 func (n *Node) proposableLocked() error {
 	if n.stopped {
 		return ErrStopped

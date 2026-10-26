@@ -1,0 +1,21 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - bodyclose
+    - misspell
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintln
+        - fmt.Fprintf
+  exclusions:
+    generated: strict
+    rules:
+      - linters: [errcheck]
+        text: "Close` is not checked"

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -328,15 +327,6 @@ func tokensUnique(t *testing.T, execs []execution) {
 		}
 		seen[e.Token] = e.TaskID
 	}
-}
-
-func sortedIDs(ts []*pb.Task) []string {
-	var out []string
-	for _, t := range ts {
-		out = append(out, t.Id)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // router is the in-process stand-in for the gRPC client: it finds a

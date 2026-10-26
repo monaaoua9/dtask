@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -313,14 +312,6 @@ func (h *harness) converge(within time.Duration, ms ...*member) {
 	}, within, 10*time.Millisecond, "state machines never converged: %s", h.dump())
 }
 
-func ids(ms ...*member) []raft.NodeID {
-	var out []raft.NodeID
-	for _, m := range ms {
-		out = append(out, m.id)
-	}
-	return out
-}
-
 func (h *harness) others(m *member) []raft.NodeID {
 	var out []raft.NodeID
 	for _, id := range h.ids {
@@ -328,11 +319,5 @@ func (h *harness) others(m *member) []raft.NodeID {
 			out = append(out, id)
 		}
 	}
-	return out
-}
-
-func sortedCopy(s []string) []string {
-	out := append([]string(nil), s...)
-	sort.Strings(out)
 	return out
 }
