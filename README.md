@@ -202,6 +202,7 @@ and isn't draining), `/debug/pprof` with `--debug`. Highlights:
 make test      # everything
 make race      # with the race detector (needs a C toolchain)
 make chaos     # the fault-injection suites, 3x each
+make soak      # DURATION=20m: sustained load + leader crashes, watches goroutines and heap
 ```
 
 | Suite | What it checks |

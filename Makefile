@@ -25,6 +25,9 @@ race:
 chaos:
 	CGO_ENABLED=1 $(GO) test -race ./internal/raft ./internal/node -run 'Random|Chaos|Partition|Zombie|Crash' -count=3 -timeout 20m
 
+soak:
+	DTASK_SOAK=$${DURATION:-5m} CGO_ENABLED=1 $(GO) test -race -run 'TestSoak$$' -v -timeout 60m ./internal/node
+
 vet:
 	$(GO) vet $(PKGS)
 
