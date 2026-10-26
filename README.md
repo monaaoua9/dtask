@@ -1,6 +1,9 @@
 # dtask
 
 [![ci](https://github.com/monaaoua9/dtask/actions/workflows/ci.yml/badge.svg)](https://github.com/monaaoua9/dtask/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/monaaoua9/dtask)](https://github.com/monaaoua9/dtask/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![go](https://img.shields.io/badge/go-1.26-00ADD8.svg)](go.mod)
 
 A distributed task execution and scheduling engine in Go. Every node runs the
 same binary; together they form a Raft cluster that stores the task queue,
@@ -22,6 +25,15 @@ n1  127.0.0.1:7001  true   true     0.0
 n2  127.0.0.1:7002  true   true     0.1
 n3  127.0.0.1:7003  true   true     0.1
 ```
+
+**Contents:**
+[Guarantees](#what-it-guarantees) ·
+[Architecture](#architecture) ·
+[Running it](#running-it) ·
+[Observability](#observability) ·
+[Testing](#testing) ·
+[Limits](#limits-worth-knowing) ·
+[Design notes](docs/ARCHITECTURE.md)
 
 ## What it guarantees
 
@@ -255,3 +267,19 @@ docs/ARCHITECTURE.md    design notes and trade-offs
   ever sees the timestamps written into the log (and never moves its clock back).
 - Finished tasks are garbage-collected after `--retention`, which is also how long
   an idempotency key is remembered.
+
+## Status
+
+Built as a study in distributed-systems correctness: the interesting part is not
+the feature list but the evidence. Every guarantee above has a test that tries
+to break it, and the test suite itself was checked by deliberately breaking the
+code (fencing that ignores the token, reads without the read barrier, a WAL that
+keeps torn tails) and confirming the tests fail. If you intend to operate a
+system like this in production, reach for `etcd`/`hashicorp/raft` underneath;
+this repository shows how the pieces work and how to test them.
+
+Design reasoning and trade-offs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## License
+
+MIT, see [LICENSE](LICENSE).
