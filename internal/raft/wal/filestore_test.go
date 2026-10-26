@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -90,7 +91,7 @@ func TestTornWriteAtTailIsDiscarded(t *testing.T) {
 	require.Len(t, log, 7)
 }
 
-func TestCorruptRecordStopsReplayThere(t *testing.T) {
+func TestCorruptRecordInTheMiddleIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	s := open(t, dir)
 	require.NoError(t, s.Append(entries(1, 6, 1)))
@@ -102,9 +103,116 @@ func TestCorruptRecordStopsReplayThere(t *testing.T) {
 	b[len(b)/2] ^= 0xff // flip a byte somewhere in the middle
 	require.NoError(t, os.WriteFile(p, b, 0o644))
 
-	_, log, _, _, err := open(t, dir).Load()
+	s2, err := Open(dir, Options{NoSync: true})
+	if s2 != nil {
+		s2.Close()
+	}
+	require.ErrorIs(t, err, ErrCorrupt, "silently dropping the entries after it could lose committed data")
+}
+
+// builds a wal image and the offset where each record starts
+func walImage(n int) ([]byte, []int) {
+	var img []byte
+	var starts []int
+	for i := 1; i <= n; i++ {
+		starts = append(starts, len(img))
+		e := raft.Entry{Index: uint64(i), Term: 1, Type: raft.EntryCommand, Data: bytes.Repeat([]byte{byte(i)}, i*3)}
+		img = append(img, encodeRecord(e)...)
+	}
+	return img, starts
+}
+
+func openImage(t *testing.T, img []byte) (*FileStore, error) {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, walFile), img, 0o644))
+	s, err := Open(dir, Options{NoSync: true})
+	if s != nil {
+		t.Cleanup(func() { s.Close() })
+	}
+	return s, err
+}
+
+// power can fail after any byte of a write, so every possible length of the
+// file must recover to exactly the records that were fully written
+func TestEveryTornLengthRecovers(t *testing.T) {
+	const n = 8
+	img, starts := walImage(n)
+	whole := func(l int) int {
+		c := 0
+		for i := range starts {
+			end := len(img)
+			if i+1 < len(starts) {
+				end = starts[i+1]
+			}
+			if end <= l {
+				c++
+			}
+		}
+		return c
+	}
+
+	for l := 0; l <= len(img); l++ {
+		s, err := openImage(t, img[:l])
+		require.NoError(t, err, "length %d", l)
+		_, log, _, _, _ := s.Load()
+		want := whole(l)
+		require.Len(t, log, want, "length %d", l)
+		for i, e := range log {
+			require.Equal(t, uint64(i+1), e.Index)
+		}
+		require.NoError(t, s.Append(entries(uint64(want+1), uint64(want+1), 2)), "length %d: appends after recovery", l)
+
+		// and what we appended must survive another restart, with nothing left from the torn tail
+		require.NoError(t, s.Close())
+		s2, err := Open(s.dir, Options{NoSync: true})
+		require.NoError(t, err, "length %d: reopen", l)
+		_, again, _, _, _ := s2.Load()
+		require.Len(t, again, want+1, "length %d: reopen", l)
+		require.NoError(t, s2.Close())
+	}
+}
+
+// a flipped byte is either caught as corruption or, if it sits in the last
+// record (indistinguishable from a torn write), costs only that record. It can
+// never produce a wrong entry.
+func TestEveryByteFlipIsDetected(t *testing.T) {
+	const n = 8
+	img, starts := walImage(n)
+	last := starts[n-1]
+
+	for p := 0; p < len(img); p++ {
+		bad := append([]byte(nil), img...)
+		bad[p] ^= 0xff
+		s, err := openImage(t, bad)
+		if p < last {
+			require.ErrorIs(t, err, ErrCorrupt, "flip at %d", p)
+			continue
+		}
+		require.NoError(t, err, "flip at %d", p)
+		_, log, _, _, _ := s.Load()
+		require.Len(t, log, n-1, "flip at %d", p)
+		for i, e := range log {
+			require.Equal(t, bytes.Repeat([]byte{byte(i + 1)}, (i+1)*3), e.Data)
+		}
+	}
+}
+
+func TestLeftoverTempFilesAreIgnored(t *testing.T) {
+	dir := t.TempDir()
+	s := open(t, dir)
+	require.NoError(t, s.Append(entries(1, 4, 1)))
+	require.NoError(t, s.Close())
+
+	for _, f := range []string{stateFile + ".tmp", snapshotFile + ".tmp", walFile + ".tmp"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, f), []byte("half-written garbage"), 0o644))
+	}
+	_, log, snap, _, err := open(t, dir).Load()
 	require.NoError(t, err)
-	require.Less(t, len(log), 6, "entries after the corruption must not be trusted")
+	require.Nil(t, snap)
+	require.Len(t, log, 4)
+	_, err = os.Stat(filepath.Join(dir, walFile+".tmp"))
+	require.True(t, os.IsNotExist(err))
 }
 
 func TestSnapshotCompactsLogAndSurvivesReload(t *testing.T) {

@@ -25,6 +25,11 @@ const (
 	recHeader    = 8          // len + crc
 )
 
+// ErrCorrupt means a record failed its checks but intact records follow it, so
+// this isn't a torn tail from a crash: entries that were acknowledged would be
+// lost if we carried on. Wipe the data dir and let the node catch up again.
+var ErrCorrupt = errors.New("wal: corrupt record in the middle of the log")
+
 type Options struct {
 	// NoSync skips fsync. Only for tests and benchmarks: a power cut can eat acked writes.
 	NoSync bool
@@ -237,27 +242,28 @@ func (s *FileStore) openWAL() error {
 		offsets []int64
 		pos     int64
 	)
-	for {
-		if int64(len(raw))-pos < recHeader {
-			break
-		}
+	for int64(len(raw))-pos >= recHeader {
 		n := int64(binary.LittleEndian.Uint32(raw[pos:]))
 		sum := binary.LittleEndian.Uint32(raw[pos+4:])
 		end := pos + recHeader + n
-		if n < 17 || end > int64(len(raw)) {
-			break
-		}
-		payload := raw[pos+recHeader : end]
-		if crc32.ChecksumIEEE(payload) != sum {
-			break
-		}
-		e := raft.Entry{
-			Index: binary.LittleEndian.Uint64(payload[0:]),
-			Term:  binary.LittleEndian.Uint64(payload[8:]),
-			Type:  raft.EntryType(payload[16]),
-			Data:  append([]byte(nil), payload[17:]...),
-		}
-		if len(entries) > 0 && e.Index != entries[len(entries)-1].Index+1 {
+		var e raft.Entry
+		good := n >= 17 && end <= int64(len(raw)) && crc32.ChecksumIEEE(raw[pos+recHeader:end]) == sum
+		if good {
+			payload := raw[pos+recHeader : end]
+			e = raft.Entry{
+				Index: binary.LittleEndian.Uint64(payload[0:]),
+				Term:  binary.LittleEndian.Uint64(payload[8:]),
+				Type:  raft.EntryType(payload[16]),
+				Data:  append([]byte(nil), payload[17:]...),
+			}
+			if len(entries) > 0 && e.Index != entries[len(entries)-1].Index+1 {
+				f.Close()
+				return fmt.Errorf("%w: index %d follows %d at offset %d", ErrCorrupt, e.Index, entries[len(entries)-1].Index, pos)
+			}
+		} else if intactRecordAfter(raw, pos+1) {
+			f.Close()
+			return fmt.Errorf("%w (offset %d)", ErrCorrupt, pos)
+		} else {
 			break
 		}
 		entries = append(entries, e)
@@ -303,6 +309,22 @@ func (s *FileStore) openWAL() error {
 	}
 	s.loadedLog = entries
 	return nil
+}
+
+// a crash can only damage the end of the file, so a valid record further on
+// proves the damage is somewhere else
+func intactRecordAfter(raw []byte, from int64) bool {
+	for o := from; o+recHeader <= int64(len(raw)); o++ {
+		n := int64(binary.LittleEndian.Uint32(raw[o:]))
+		end := o + recHeader + n
+		if n < 17 || end > int64(len(raw)) {
+			continue
+		}
+		if crc32.ChecksumIEEE(raw[o+recHeader:end]) == binary.LittleEndian.Uint32(raw[o+4:]) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *FileStore) Load() (raft.PersistentState, []raft.Entry, *raft.SnapshotMeta, []byte, error) {

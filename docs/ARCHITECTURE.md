@@ -138,6 +138,17 @@ nothing after the first bad record). The snapshot is written *before* the WAL is
 rewritten, and loading discards WAL entries the snapshot already covers, so a
 crash between the two steps is harmless (tested).
 
+Crash damage can only be at the *end* of the log, so recovery distinguishes the
+two cases: a bad record with nothing intact after it is a torn tail and is cut
+off; a bad record with a valid record somewhere later is real corruption, and
+`Open` refuses with `ErrCorrupt` instead of silently dropping entries that may
+have been acknowledged. The remedy is to wipe that node's data dir and let it
+catch up from the leader. Tests: every possible torn length of the file, every
+single-byte flip, leftover temp files, and the whole-system chaos run again with
+garbage appended to the WAL of every crashed node before it restarts.
+Not covered: a disk that lies about fsync, and corruption of the final record
+(which looks exactly like a torn write).
+
 **Linearizability of the API.** Writes go through the log. `GetTask`, `ListTasks`
 and `QueueStats` call `ReadBarrier`. `Lease` first peeks at the leader's local
 FSM (`HasReady`) so empty polls don't write to the log; a stale peek at worst
