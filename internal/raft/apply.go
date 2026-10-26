@@ -53,7 +53,8 @@ func (n *Node) afterApplyLocked(e Entry, res any) {
 		c, err := DecodeConfiguration(e.Data)
 		n.must(err)
 		n.appliedConf = c
-		if n.role == Leader {
+		// Stop clears n.peers while the role is still Leader
+		if n.role == Leader && !n.stopped {
 			n.pruneAndStartPeersLocked()
 			_, still := c.Get(n.id)
 			resign = !still && e.Index == n.confIndex
