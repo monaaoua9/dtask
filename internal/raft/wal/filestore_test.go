@@ -290,3 +290,33 @@ func TestCorruptSnapshotIsAnError(t *testing.T) {
 	}
 	require.Error(t, err)
 }
+
+// snapshot landed past the end of the wal, then power died before the wal was
+// rewritten. Two restarts later the node used to refuse to start.
+func TestSnapshotAheadOfWalSurvivesTwoRestarts(t *testing.T) {
+	dir := t.TempDir()
+	s := open(t, dir)
+	require.NoError(t, s.Append(entries(1, 5, 1)))
+	require.NoError(t, s.Close())
+
+	side := open(t, t.TempDir())
+	require.NoError(t, side.SaveSnapshot(raft.SnapshotMeta{Index: 9, Term: 1}, []byte("x")))
+	require.NoError(t, side.Close())
+	b, err := os.ReadFile(filepath.Join(side.dir, snapshotFile))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, snapshotFile), b, 0o644))
+
+	s = open(t, dir)
+	_, log, meta, _, err := s.Load()
+	require.NoError(t, err)
+	require.Equal(t, uint64(9), meta.Index)
+	require.Empty(t, log)
+	require.NoError(t, s.Append(entries(10, 11, 2)))
+	require.NoError(t, s.Close())
+
+	s = open(t, dir)
+	_, log, _, _, err = s.Load()
+	require.NoError(t, err, "second restart")
+	require.Len(t, log, 2)
+	require.Equal(t, uint64(10), log[0].Index)
+}

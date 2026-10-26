@@ -286,7 +286,10 @@ func (s *FileStore) openWAL() error {
 			cut++
 		}
 		entries, offsets = entries[cut:], offsets[cut:]
-		if len(entries) > 0 && entries[0].Index != s.loadedSnap.Index+1 {
+		gap := len(entries) > 0 && entries[0].Index != s.loadedSnap.Index+1
+		// nothing usable left: wipe the file too, or the next append would land
+		// behind stale records and the following Open would call it corruption
+		if gap || len(entries) == 0 {
 			entries, offsets = nil, nil
 			if err := f.Truncate(0); err != nil {
 				f.Close()
@@ -308,6 +311,7 @@ func (s *FileStore) openWAL() error {
 		s.first = entries[0].Index
 	}
 	s.loadedLog = entries
+	s.syncDir() // the wal.log we may just have created has to survive power loss too
 	return nil
 }
 
