@@ -3,6 +3,8 @@ package node_test
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -25,11 +27,22 @@ func TestChaosCrashesPartitionsAndPacketLoss(t *testing.T) {
 		seeds = seeds[:1]
 	}
 	for _, seed := range seeds {
-		t.Run(fmt.Sprintf("seed=%d", seed), func(t *testing.T) { runSystemChaos(t, seed) })
+		t.Run(fmt.Sprintf("seed=%d", seed), func(t *testing.T) { runSystemChaos(t, seed, false) })
 	}
 }
 
-func runSystemChaos(t *testing.T, seed int64) {
+// same run, but every crashed node comes back with a damaged disk tail
+func TestChaosTornDiskOnRestart(t *testing.T) {
+	seeds := []int64{44, 55}
+	if testing.Short() {
+		seeds = seeds[:1]
+	}
+	for _, seed := range seeds {
+		t.Run(fmt.Sprintf("seed=%d", seed), func(t *testing.T) { runSystemChaos(t, seed, true) })
+	}
+}
+
+func runSystemChaos(t *testing.T, seed int64, tear bool) {
 	rng := rand.New(rand.NewSource(seed))
 	c := newTestCluster(t, 5, func(cfg *node.Config) {
 		cfg.SnapshotThreshold = 80
@@ -65,6 +78,9 @@ func runSystemChaos(t *testing.T, seed int64) {
 			}
 		case 1:
 			for d := range down {
+				if tear {
+					tearDisk(t, c.cfg[d].DataDir, rng)
+				}
 				c.restart(d)
 				delete(down, d)
 				break
@@ -90,6 +106,9 @@ func runSystemChaos(t *testing.T, seed int64) {
 	c.net.SetDropRate(0)
 	c.net.SetLatency(0, 0)
 	for d := range down {
+		if tear {
+			tearDisk(t, c.cfg[d].DataDir, rng)
+		}
 		c.restart(d)
 	}
 	submitted.Wait()
@@ -113,6 +132,43 @@ func runSystemChaos(t *testing.T, seed int64) {
 
 	extra := len(c.rec.all()) - total
 	t.Logf("seed=%d: %d executions for %d tasks (%d re-runs after interruptions)", seed, len(c.rec.all()), total, extra)
+}
+
+// what a power cut can leave behind: a record cut off halfway, a tail of
+// zeros (file extended, data never landed), noise, or temp files from an
+// interrupted atomic replace. Nothing already on disk is touched.
+func tearDisk(t *testing.T, dataDir string, rng *rand.Rand) {
+	t.Helper()
+	dir := filepath.Join(dataDir, "raft")
+	junk := func(n int) []byte {
+		b := make([]byte, n)
+		rng.Read(b)
+		return b
+	}
+
+	var tail []byte
+	switch rng.Intn(4) {
+	case 0: // header promising 200 bytes, only a few arrived
+		tail = append([]byte{200, 0, 0, 0}, junk(4+rng.Intn(60))...)
+	case 1:
+		tail = make([]byte, 1+rng.Intn(200))
+	case 2:
+		tail = junk(1 + rng.Intn(200))
+	case 3: // complete-looking header, wrong checksum, payload cut short
+		tail = append([]byte{40, 0, 0, 0}, junk(4)...)
+		tail = append(tail, junk(10)...)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "wal.log"), os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.Write(tail)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	if rng.Intn(2) == 0 {
+		for _, name := range []string{"state.json.tmp", "snapshot.bin.tmp", "wal.log.tmp"} {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, name), junk(30), 0o644))
+		}
+	}
 }
 
 func rng2(seed int64, i, max int) int {
