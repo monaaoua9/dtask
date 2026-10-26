@@ -220,6 +220,7 @@ func testGRPCCluster(t *testing.T, tlsFiles tlsutil.Files) {
 
 func checkHTTP(t *testing.T, nc *netCluster) {
 	t.Helper()
+	var all strings.Builder
 	for _, nd := range nc.nodes {
 		base := "http://" + nd.HTTPAddr()
 		for path, want := range map[string]int{"/healthz": 200, "/readyz": 200} {
@@ -233,10 +234,15 @@ func checkHTTP(t *testing.T, nc *netCluster) {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		text := string(body)
-		for _, m := range []string{"dtask_raft_term", "dtask_raft_commit_index", `dtask_tasks{queue="default",state="succeeded"}`, "dtask_grpc_requests_total", "dtask_worker_executions_total"} {
+		for _, m := range []string{"dtask_raft_term", "dtask_raft_commit_index"} {
 			require.True(t, strings.Contains(text, m), "metric %s missing from /metrics on %s", m, nd.ID())
 		}
-		return // one node is enough
+		all.WriteString(text)
+	}
+	// these only appear once something has happened on that node, and which
+	// node saw it depends on who led and who polled
+	for _, m := range []string{`dtask_tasks{queue="default",state="succeeded"}`, "dtask_grpc_requests_total", "dtask_worker_executions_total"} {
+		require.Contains(t, all.String(), m, "metric missing from every node")
 	}
 }
 
