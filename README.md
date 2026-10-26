@@ -153,7 +153,7 @@ leader on its own. Start a fourth node later with
 ### Docker
 
 ```sh
-make cluster          # 3 nodes + Prometheus on :9090
+make cluster          # 3 nodes + Prometheus on :9090 + Grafana dashboard on :3000 (alert rules in deploy/alerts.yml)
 docker compose -f deploy/docker-compose.yml kill n1
 ```
 

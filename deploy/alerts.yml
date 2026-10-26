@@ -1,0 +1,33 @@
+groups:
+  - name: dtask
+    rules:
+      - alert: DtaskNoLeader
+        expr: count(dtask_raft_role == 2) == 0
+        for: 15s
+        labels: {severity: page}
+        annotations: {summary: "no node reports itself leader"}
+      - alert: DtaskSplitLeaders
+        expr: count(dtask_raft_role == 2) > 1
+        for: 30s
+        labels: {severity: page}
+        annotations: {summary: "more than one leader visible (different terms are normal for a moment, not for 30s)"}
+      - alert: DtaskLeaderFlapping
+        expr: sum(increase(dtask_raft_leader_changes_total[10m])) > 3
+        labels: {severity: warn}
+        annotations: {summary: "leadership changed more than 3 times in 10 minutes"}
+      - alert: DtaskNodeDown
+        expr: up{job="dtask"} == 0
+        for: 30s
+        labels: {severity: warn}
+      - alert: DtaskApplyLag
+        expr: (dtask_raft_last_log_index - dtask_raft_applied_index) > 1000
+        for: 1m
+        labels: {severity: warn}
+      - alert: DtaskCommitSlow
+        expr: histogram_quantile(0.99, sum by (le)(rate(dtask_raft_commit_latency_seconds_bucket[5m]))) > 0.5
+        for: 5m
+        labels: {severity: warn}
+      - alert: DtaskTasksDying
+        expr: sum(rate(dtask_task_outcomes_total{outcome="dead"}[5m])) > 0
+        for: 5m
+        labels: {severity: warn}
