@@ -320,3 +320,25 @@ func TestSnapshotAheadOfWalSurvivesTwoRestarts(t *testing.T) {
 	require.Len(t, log, 2)
 	require.Equal(t, uint64(10), log[0].Index)
 }
+
+// recovery must physically cut the damaged tail, not just ignore it: otherwise
+// the garbage stays on disk behind whatever gets appended next
+func TestOpenTruncatesTornTail(t *testing.T) {
+	img, starts := walImage(5)
+	valid := starts[4] + len(encodeRecord(raft.Entry{Index: 5, Term: 1, Type: raft.EntryCommand, Data: bytes.Repeat([]byte{5}, 15)}))
+	require.Equal(t, len(img), valid)
+
+	for _, junk := range [][]byte{
+		{200, 0, 0, 0, 1, 2, 3},
+		make([]byte, 100),
+		bytes.Repeat([]byte{0xab}, 37),
+	} {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, walFile), append(append([]byte(nil), img...), junk...), 0o644))
+		s := open(t, dir)
+		st, err := os.Stat(filepath.Join(dir, walFile))
+		require.NoError(t, err)
+		require.Equal(t, int64(valid), st.Size(), "garbage tail of %d bytes left on disk", len(junk))
+		require.NoError(t, s.Close())
+	}
+}
