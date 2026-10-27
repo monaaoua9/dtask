@@ -220,7 +220,7 @@ make soak      # DURATION=20m: sustained load + leader crashes, watches goroutin
 | Suite | What it checks |
 |---|---|
 | `internal/raft` | Single leader per term (a background watcher records every observed leader), replication, crash/restart on memory and on-disk stores, minority leader steps down and its writes never "succeed", pre-vote, snapshot catch-up, read barriers, membership add/remove/remove-leader, leadership transfer, and a seeded random-fault soak where acknowledged writes must survive and appear exactly once. |
-| `internal/raft/wal` | Torn tail write, flipped byte, crash between snapshot and WAL trim, truncation, compaction. |
+| `internal/raft/wal` | Every possible torn file length, every single-byte flip (mid-log corruption is refused, a damaged tail is cut), leftover temp files, crash between snapshot and WAL trim, snapshot ahead of the log, truncation, compaction. |
 | `internal/fsm` | Every command, fencing, rate limiting (including sub-millisecond polling), snapshot/restore, and a randomised test that applies the same commands to two replicas, one rebuilt from a snapshot halfway, and demands identical results and digests. |
 | `internal/linearize` | The checker itself, tested on known good and bad histories. |
 | `internal/node` | Whole system over a simulated network: exactly-once under no faults, leader crash mid-flight, follower crash redistributes before lease expiry, **partitioned zombie worker is fenced** and the stored result belongs to the winning lease, graceful drain, shutdown past deadline, cluster-wide rate limit, membership change, and a chaos run (random crashes with restart from disk, partitions, 10% packet loss, latency) checking that no task is lost, no fencing token is issued twice, and all replicas end identical, plus a **linearizability check**: concurrent clients lease, complete, release and read tasks during the same kind of chaos, and a Wing & Gong checker (`internal/linearize`) verifies each task's recorded history against the lease/fencing model. |
@@ -274,7 +274,7 @@ Built as a study in distributed-systems correctness: the interesting part is not
 the feature list but the evidence. Every guarantee above has a test that tries
 to break it, and the test suite itself was checked by deliberately breaking the
 code (fencing that ignores the token, reads without the read barrier, a WAL that
-keeps torn tails) and confirming the tests fail. If you intend to operate a
+doesn't detect mid-log corruption) and confirming the tests fail. If you intend to operate a
 system like this in production, reach for `etcd`/`hashicorp/raft` underneath;
 this repository shows how the pieces work and how to test them.
 
