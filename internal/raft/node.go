@@ -439,11 +439,12 @@ func (n *Node) campaign(transfer bool) {
 	}
 	n.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(n.baseCtx, n.cfg.ElectionTimeoutMax)
-	defer cancel()
-
 	if !transfer {
-		if !n.gatherVotes(ctx, conf, pre) {
+		// own budget: a slow probe shouldn't leave the real vote no time
+		pctx, pcancel := context.WithTimeout(n.baseCtx, n.cfg.ElectionTimeoutMax)
+		ok := n.gatherVotes(pctx, conf, pre)
+		pcancel()
+		if !ok {
 			n.metrics.election("pre", "lost")
 			return
 		}
@@ -471,6 +472,8 @@ func (n *Node) campaign(transfer bool) {
 	conf = n.conf.Clone()
 	n.mu.Unlock()
 
+	ctx, cancel := context.WithTimeout(n.baseCtx, n.cfg.ElectionTimeoutMax)
+	defer cancel()
 	won := n.gatherVotes(ctx, conf, req)
 
 	n.mu.Lock()

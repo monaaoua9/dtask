@@ -7,6 +7,12 @@ import "context"
 // doesn't have to sit through an election timeout. On failure the node just
 // carries on as leader.
 func (n *Node) TransferLeadership(ctx context.Context) error {
+	// while this runs every proposal is refused, so never wait forever
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*n.cfg.ElectionTimeoutMax)
+		defer cancel()
+	}
 	n.mu.Lock()
 	if n.stopped {
 		n.mu.Unlock()
@@ -82,7 +88,7 @@ func (n *Node) HandleTimeoutNow(req *TimeoutNowRequest) (*TimeoutNowResponse, er
 		return nil, ErrStopped
 	}
 	resp := &TimeoutNowResponse{Term: n.term}
-	if req.Term != n.term || n.role == Leader || n.campaigning || !n.conf.IsVoter(n.id) {
+	if req.Term != n.term || req.LeaderID != n.leaderID || n.role == Leader || n.campaigning || !n.conf.IsVoter(n.id) {
 		return resp, nil
 	}
 	n.campaigning = true
