@@ -215,6 +215,7 @@ make test      # everything
 make race      # with the race detector (needs a C toolchain)
 make chaos     # the fault-injection suites, 3x each
 make soak      # DURATION=20m: sustained load + leader crashes, watches goroutines and heap
+scripts/docker-failover.sh   # real containers over real TCP: kill the leader, freeze the next one, recover
 ```
 
 | Suite | What it checks |
@@ -224,6 +225,7 @@ make soak      # DURATION=20m: sustained load + leader crashes, watches goroutin
 | `internal/fsm` | Every command, fencing, rate limiting (including sub-millisecond polling), snapshot/restore, and a randomised test that applies the same commands to two replicas, one rebuilt from a snapshot halfway, and demands identical results and digests. |
 | `internal/linearize` | The checker itself, tested on known good and bad histories. |
 | `internal/node` | Whole system over a simulated network: exactly-once under no faults, leader crash mid-flight, follower crash redistributes before lease expiry, **partitioned zombie worker is fenced** and the stored result belongs to the winning lease, graceful drain, shutdown past deadline, cluster-wide rate limit, membership change, and a chaos run (random crashes with restart from disk, partitions, 10% packet loss, latency) checking that no task is lost, no fencing token is issued twice, and all replicas end identical, plus a **linearizability check**: concurrent clients lease, complete, release and read tasks during the same kind of chaos, and a Wing & Gong checker (`internal/linearize`) verifies each task's recorded history against the lease/fencing model. |
+| `scripts/docker-failover.sh` | Three containers, real network: leader killed, next leader frozen (no majority, so the survivor must refuse leadership), both brought back, and all 60 submitted tasks (idempotency keys) end up succeeded. Not part of CI. |
 | `internal/node` (gRPC) | Real sockets: leader killed under load, client redirect, idempotent submit, pagination, join, graceful handoff, `/metrics`, and the same cluster over mutual TLS. |
 
 The network is simulated by `internal/raft/simnet`: partitions (including
