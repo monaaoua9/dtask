@@ -254,6 +254,8 @@ internal/server/        gRPC + HTTP servers, error mapping
 internal/node/          wiring, startup/shutdown order, system tests
 pkg/client/             Go client with leader discovery and retries
 docs/ARCHITECTURE.md    design notes and trade-offs
+docs/DESIGN.md          the main decisions, short
+docs/BENCHMARKS.md      bench commands and results
 ```
 
 ## Limits worth knowing
