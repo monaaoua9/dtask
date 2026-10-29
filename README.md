@@ -281,7 +281,7 @@ doesn't detect mid-log corruption) and confirming the tests fail. If you intend 
 system like this in production, reach for `etcd`/`hashicorp/raft` underneath;
 this repository shows how the pieces work and how to test them.
 
-Design reasoning and trade-offs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Design reasoning and trade-offs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the short list of decisions is [docs/DESIGN.md](docs/DESIGN.md).
 
 ## License
 
