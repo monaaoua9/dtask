@@ -259,8 +259,8 @@ docs/ARCHITECTURE.md    design notes and trade-offs
 
 - One Raft group holds all queues, so write throughput is bounded by a single
   leader. Proposals are group-committed (one fsync per batch); on my laptop
-  (i5-8365U) a single node with a real WAL does ~28k commits/s and 3 in-process
-  nodes ~139k/s with memory stores (`go test -bench Propose ./internal/raft`).
+  (i5-8365U) a single node with a real WAL does ~43k commits/s and 3 in-process
+  nodes ~176k/s with memory stores (`go test -bench Propose ./internal/raft`).
   Sharding queues across groups is the long-term answer.
 - Snapshots travel in one gRPC message and the FSM is held in memory.
 - Membership changes are single-server, not joint consensus.
