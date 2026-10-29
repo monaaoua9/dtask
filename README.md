@@ -33,7 +33,8 @@ n3  127.0.0.1:7003  true   true     0.1
 [Observability](#observability) ·
 [Testing](#testing) ·
 [Limits](#limits-worth-knowing) ·
-[Design notes](docs/ARCHITECTURE.md)
+[Design notes](docs/ARCHITECTURE.md) ·
+[Benchmarks](docs/BENCHMARKS.md)
 
 ## What it guarantees
 
